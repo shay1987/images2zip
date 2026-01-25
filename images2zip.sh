@@ -3,7 +3,8 @@
 # Default values
 log_file="images2zip.log"
 input_file="images.txt"
-output_directory="images"
+output_name="images"               # logical name
+save_directory="$HOME/Downloads"   # new: base directory for output dir + zip
 delete_dir=false
 retries=1   # default: 1 attempt (no extra retries)
 
@@ -20,11 +21,13 @@ Download Docker images listed in an input file, save them as tar files,
 zip them, and log all operations.
 
 Options:
-  -f, --file <file>    Set input file with image list (default: images.txt)
-  -n, --name <name>    Set output directory and zip name (default: images -> images.zip)
-  -r, --retries <num>  Number of retries for docker pull (default: 1 = no extra retries)
-  -d, --delete         Delete the output directory at the end (after successful zip)
-  -h, --help           Show this help message and exit
+  -f, --file <file>     Set input file with image list (default: images.txt)
+  -n, --name <name>     Set output name (directory and zip base name, default: images)
+  -s, --save <dir>      Set base directory where output dir and zip are created
+                        (default: \$HOME/Downloads)
+  -r, --retries <num>   Number of retries for docker pull (default: 1 = no extra retries)
+  -d, --delete          Delete the output directory at the end (after successful zip)
+  -h, --help            Show this help message and exit
 
 Notes:
   - Input file is: $input_file
@@ -70,7 +73,15 @@ while [[ $# -gt 0 ]]; do
                 echo "Error: -n/--name requires a value." >&2
                 exit 1
             fi
-            output_directory="$2"
+            output_name="$2"
+            shift 2
+            ;;
+        -s|--save)
+            if [[ -z "${2:-}" ]]; then
+                echo "Error: -s/--save requires a directory path." >&2
+                exit 1
+            fi
+            save_directory="$2"
             shift 2
             ;;
         -r|--retries)
@@ -105,7 +116,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-output_zip="${output_directory}.zip"
+# Resolve and create save_directory
+save_directory="${save_directory/#\~/$HOME}"
+mkdir -p "$save_directory"
+
+output_directory="$save_directory/$output_name"
+output_zip="$save_directory/${output_name}.zip"
 
 # Count non-empty lines (images) in the input file
 if [ -f "$input_file" ]; then
@@ -124,13 +140,13 @@ fi
 log "File '$input_file' found. Proceeding..."
 log "Total images listed in '$input_file': $total_images_in_file"
 log "Using retries for docker pull: $retries"
+log "Save directory: $save_directory"
+log "Output directory: $output_directory"
+log "Zip file will be named: $output_zip"
 
 # Create the output directory if it doesn't exist
 mkdir -p "$output_directory"
 
-# Notify the user about the process
-log "Output directory: $output_directory"
-log "Zip file will be named: $output_zip"
 log "Starting to process Docker images from '$input_file'..."
 log "This might take some time, depending on your internet speed."
 
@@ -176,7 +192,7 @@ for f in "${tar_files[@]}"; do
     log "Will add to zip: $f"
 done
 
-log "Creating zip file: $output_zip..."
+log "Creating zip file: $output_zip"
 
 if zip -j "$output_zip" "${tar_files[@]}"; then
     log "Successfully created zip file: $output_zip"
@@ -199,6 +215,5 @@ if [ "$delete_dir" = true ]; then
     log "Output directory '$output_directory' deleted."
 fi
 
-# Notify the user of completion
 log "All Docker images have been saved and zipped into '$output_zip'."
 log "Process complete!"
