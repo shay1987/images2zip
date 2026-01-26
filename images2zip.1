@@ -1,0 +1,258 @@
+.TH "IMAGES2ZIP" "1" "2026-01-26" "images2zip 1.0.0" "User Commands"
+
+.SH images2zip(1)
+
+.SS NAME
+
+\f[B]images2zip\f[R] \[en] download Docker images, save them as tar
+files, zip them, and log all operations.
+
+.SS SYNOPSIS
+
+\f[B]images2zip.sh\f[R] [\f[B]OPTIONS\f[R]]
+
+.SS DESCRIPTION
+
+\f[B]images2zip.sh\f[R] reads a list of Docker image references from a
+text file, pulls each image, retags it, saves it as a tar archive into a
+directory, and finally creates a zip archive containing all generated
+tar files.
+
+.PD 0
+.P
+.PD
+
+The script writes a timestamped log of all operations to
+\f[CR]images2zip.log\f[R], including successes, failures, retry
+attempts, and a final summary with image counts.
+
+.PD 0
+.P
+.PD
+
+By default, the script expects an \f[CR]images.txt\f[R] file in the
+current working directory and creates an \f[CR]images/\f[R] directory
+with \f[CR]images.zip\f[R].
+With the \f[CR]\-s/\-\-save\f[R] option, outputs are written under a
+configurable base directory (default: \f[CR]\[ti]/Downloads\f[R]).
+
+.SS OPTIONS
+
+.TP
+\f[B]\-f\f[R], \f[B]\[en]file\f[R] \f[I]FILE\f[R]
+Use \f[I]FILE\f[R] as the input file containing the list of Docker
+images, one per line.
+Default: \f[CR]images.txt\f[R].
+
+.TP
+\f[B]\-n\f[R], \f[B]\[en]name\f[R] \f[I]NAME\f[R]
+Set the output name (directory and zip base name).
+The script creates a directory named \f[I]NAME\f[R] under the save
+directory and a zip file named \f[CR]NAME.zip\f[R] in the same location.
+Default: \f[CR]images\f[R].
+
+.TP
+\f[B]\-s\f[R], \f[B]\[en]save\f[R] \f[I]DIR\f[R]
+Set the base directory where the output directory and zip file are
+created.
+
+.PD 0
+.P
+.PD
+
+Default: \f[CR]\[ti]/Downloads\f[R].
+
+.TP
+\f[B]\-r\f[R], \f[B]\[en]retries\f[R] \f[I]NUM\f[R]
+Set the number of attempts for \f[CR]docker pull\f[R] for each image.
+\f[CR]NUM\f[R] must be a positive integer.
+A value of \f[CR]1\f[R] means a single attempt (no extra retries).
+On failure the script logs each attempt and waits 5 seconds before
+retrying.
+
+.TP
+\f[B]\-d\f[R], \f[B]\[en]delete\f[R]
+Delete the output directory after a successful zip is created, keeping
+only the zip file.
+
+.TP
+\f[B]\-h\f[R], \f[B]\[en]help\f[R]
+Display a short help message describing usage, options, and default
+values, then exit.
+
+.SS INPUT FILE FORMAT
+
+The input file is a plain text file containing Docker image references,
+one per line, for example:
+
+.IP
+.EX
+shay1987/arcade:latest
+nginx:latest
+alpine:3.19
+.EE
+
+.PP
+Empty lines and lines with only whitespace are ignored.
+
+.PD 0
+.P
+.PD
+
+If your images are hosted in a private registry, you can include the
+registry prefix, for example:
+
+.IP
+.EX
+myregistry.local:5000/team/app-backend:1.2.3
+myregistry.local:5000/team/app-frontend:2.0.0
+.EE
+
+.PP
+The script will retag images according to its internal rules to make
+them easier to use in other environments.
+
+.SS OPERATION
+
+.IP "1." 3
+\f[B]Argument parsing\f[R] \[en] parses options to determine input file,
+save directory, output name, retry count, delete behavior, and help.
+
+.PD 0
+.P
+.PD
+
+.IP "2." 3
+\f[B]Input validation\f[R] \[en] checks the existence of the input file
+and counts non‑empty lines.
+
+.PD 0
+.P
+.PD
+
+.IP "3." 3
+\f[B]Image processing\f[R] \[en] for each non‑empty line: pulls with
+retry logic, retags images, and saves to a tar file in the output
+directory.
+
+.PD 0
+.P
+.PD
+
+.IP "4." 3
+\f[B]Archiving\f[R] \[en] collects all \f[CR]*.tar\f[R] files and
+creates \f[CR]<save>/<name>.zip\f[R].
+
+.PD 0
+.P
+.PD
+
+.IP "5." 3
+\f[B]Optional cleanup\f[R] \[en] if \f[CR]\-d\f[R]/\f[CR]\-\-delete\f[R]
+is set and zip succeeded, removes the output directory.
+
+.PD 0
+.P
+.PD
+
+.IP "6." 3
+\f[B]Logging and summary\f[R] \[en] logs all operations and ends with a
+summary: images in file, images zipped, retry count.
+
+.SS LOGGING
+
+All actions and errors are logged with timestamps to
+\f[CR]images2zip.log\f[R].
+Logged events include configuration, per‑image status, zip creation, and
+optional directory deletion.
+
+.SS EXIT STATUS
+
+Exit status 0 on success; non‑zero on missing input file, no tar files
+to zip, or zip failure.
+
+.SS EXAMPLES
+
+(Replace the markers around each example with \f[CR]sh\f[R] after
+pasting)
+
+.PP
+
+Run with defaults:
+
+.PD 0
+.P
+.PD
+
+\f[CR]./images2zip.sh\f[R]
+
+.PP
+Custom input and output name (saved under \f[CR]\[ti]/Downloads\f[R]):
+
+.PD 0
+.P
+.PD
+
+\f[CR]./images2zip.sh \-f my_images.txt \-n my-bundle\f[R]
+
+.PP
+Custom save directory and retries:
+
+.PD 0
+.P
+.PD
+
+\f[CR]./images2zip.sh \-f images.txt \-n lab-pack \-s /mnt/shared \-r 3\f[R]
+
+.PP
+Retries and delete tars afterward:
+
+.PD 0
+.P
+.PD
+
+\f[CR]./images2zip.sh \-f images.txt \-n images-pack \-r 3 \-d\f[R]
+
+.PP
+Show help:
+
+.PD 0
+.P
+.PD
+
+\f[CR]./images2zip.sh \-h\f[R]
+
+.SS FILES
+
+\f[CR]images2zip.sh\f[R] \[en] the script itself.
+
+.PD 0
+.P
+.PD
+
+\f[CR]images2zip.log\f[R] \[en] log file with timestamped execution
+information.
+
+.PD 0
+.P
+.PD
+
+\f[CR]images.txt\f[R] (or custom input file) \[en] list of Docker images
+to process.
+
+.PD 0
+.P
+.PD
+
+\f[CR]<save>/<name>/\f[R] \[en] output directory containing tar files.
+
+.PD 0
+.P
+.PD
+
+\f[CR]<save>/<name>.zip\f[R] \[en] zip archive containing all tar files
+produced.
+
+.SS SEE ALSO
+
+\f[B]docker-pull\f[R](1), \f[B]docker-save\f[R](1), \f[B]zip\f[R](1)
