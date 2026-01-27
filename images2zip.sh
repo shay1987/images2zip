@@ -1,24 +1,93 @@
 #!/bin/bash
 
-# Default values
-log_file="images2zip.log"
-input_file="images.txt"
-output_name="images"               # logical name
-save_directory="$HOME/Downloads"   # new: base directory for output dir + zip
-delete_dir=false
-retries=1   # default: 1 attempt (no extra retries)
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-log() {
-    # Timestamp format: 2026-01-19 20:30:00
-    echo "$(date '+%Y-%m-%d %H:%M:%S') $1" | tee -a "$log_file"
+log_file=""
+input_file="images.txt"
+output_name="images"
+save_directory="$HOME/Downloads"
+delete_dir=false
+retries=1
+verbose=false
+
+# Internal logging helper
+_log() {
+  local level="$1"
+  local color="$2"
+  local message="$3"
+  local timestamp
+  timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+  local formatted="[$level] $timestamp $message"
+
+  # Output to terminal with color
+  if [[ "$level" == "ERROR" ]]; then
+    echo -e "${color}${formatted}${NC}" >&2
+  else
+    echo -e "${color}${formatted}${NC}"
+  fi
+
+  # Write to log file if enabled (strip color codes)
+  if [[ -n "$log_file" ]]; then
+    echo "$formatted" >>"$log_file"
+  fi
+}
+
+log_info() {
+  _log "INFO" "$BLUE" "$1"
+}
+
+log_success() {
+  _log "SUCCESS" "$GREEN" "$1"
+}
+
+log_warning() {
+  _log "WARNING" "$YELLOW" "$1"
+}
+
+log_error() {
+  _log "ERROR" "$RED" "$1"
+}
+
+log_verbose() {
+  if [[ "$verbose" == true ]]; then
+    _log "VERBOSE" "$NC" "$1"
+  fi
+}
+
+check_dependencies() {
+  local missing_deps=()
+
+  command -v docker &>/dev/null || missing_deps+=("docker")
+  command -v zip &>/dev/null || missing_deps+=("zip")
+
+  if [ ${#missing_deps[@]} -gt 0 ]; then
+    log_error "Missing required dependencies: ${missing_deps[*]}"
+    log_error "Install docker: https://docs.docker.com/engine/install/"
+    log_error "Install zip: apt install zip (Debian/Ubuntu) or dnf install zip (Fedora/RHEL)"
+    exit 1
+  fi
+
+  if ! docker ps &>/dev/null; then
+    log_error "Docker daemon is not accessible."
+    log_error "Ensure Docker is running: sudo systemctl start docker"
+    log_error "Or add user to docker group: sudo usermod -aG docker \$USER"
+    exit 1
+  fi
+
+  log_verbose "All dependencies verified: docker, zip"
 }
 
 usage() {
-    cat <<EOF
+  cat <<EOF
 Usage: $0 [OPTIONS]
 
 Download Docker images listed in an input file, save them as tar files,
-zip them, and log all operations.
+zip them, and optionally log all operations.
 
 Options:
   -f, --file <file>     Set input file with image list (default: images.txt)
@@ -27,193 +96,177 @@ Options:
                         (default: \$HOME/Downloads)
   -r, --retries <num>   Number of retries for docker pull (default: 1 = no extra retries)
   -d, --delete          Delete the output directory at the end (after successful zip)
+  -v, --verbose         Enable verbose output (detailed progress messages)
+  -l, --log <file>      Enable logging to specified file (disabled by default)
   -h, --help            Show this help message and exit
 
 Notes:
-  - Input file is: $input_file
-  - Log file is:   $log_file
+  - Input file default: $input_file
+  - Logging is disabled by default. Use -l to enable.
 EOF
 }
 
 docker_pull_with_retries() {
-    local image="$1"
-    local attempt=1
+  local image="$1"
+  local attempt=1
 
-    while true; do
-        log "Attempt $attempt/$retries for pulling image: $image"
-        if docker pull "$image"; then
-            log "Successfully pulled image: $image on attempt $attempt"
-            return 0
-        fi
+  while true; do
+    if ((retries > 1)); then
+      log_info "Pulling $image (attempt $attempt/$retries)..."
+    else
+      log_verbose "Pulling $image..."
+    fi
+    if docker pull "$image"; then
+      log_success "Pulled: $image"
+      return 0
+    fi
 
-        if (( attempt >= retries )); then
-            log "Error: Failed to pull image '$image' after $attempt attempt(s)."
-            return 1
-        fi
+    if ((attempt >= retries)); then
+      log_error "Failed to pull '$image' after $attempt attempt(s)."
+      return 1
+    fi
 
-        attempt=$((attempt + 1))
-        log "Failed to pull '$image', retrying in 5 seconds..."
-        sleep 5
-    done
+    attempt=$((attempt + 1))
+    log_warning "Failed to pull '$image', retrying in 2 seconds..."
+    sleep 2
+  done
+}
+
+# Helper to require an argument value
+require_arg() {
+  local opt="$1"
+  local val="$2"
+  if [[ -z "$val" ]]; then
+    echo "Error: $opt requires a value." >&2
+    exit 1
+  fi
 }
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -f|--file)
-            if [[ -z "${2:-}" ]]; then
-                echo "Error: -f/--file requires a value." >&2
-                exit 1
-            fi
-            input_file="$2"
-            shift 2
-            ;;
-        -n|--name)
-            if [[ -z "${2:-}" ]]; then
-                echo "Error: -n/--name requires a value." >&2
-                exit 1
-            fi
-            output_name="$2"
-            shift 2
-            ;;
-        -s|--save)
-            if [[ -z "${2:-}" ]]; then
-                echo "Error: -s/--save requires a directory path." >&2
-                exit 1
-            fi
-            save_directory="$2"
-            shift 2
-            ;;
-        -r|--retries)
-            if [[ -z "${2:-}" ]]; then
-                echo "Error: -r/--retries requires a numeric value." >&2
-                exit 1
-            fi
-            if ! [[ "$2" =~ ^[0-9]+$ ]]; then
-                echo "Error: -r/--retries must be a non-negative integer." >&2
-                exit 1
-            fi
-            retries="$2"
-            if (( retries < 1 )); then
-                echo "Error: -r/--retries must be at least 1." >&2
-                exit 1
-            fi
-            shift 2
-            ;;
-        -d|--delete)
-            delete_dir=true
-            shift
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1" >&2
-            usage
-            exit 1
-            ;;
-    esac
+  case "$1" in
+  -f | --file)
+    require_arg "$1" "${2:-}"
+    input_file="$2"
+    shift 2
+    ;;
+  -n | --name)
+    require_arg "$1" "${2:-}"
+    output_name="$2"
+    shift 2
+    ;;
+  -s | --save)
+    require_arg "$1" "${2:-}"
+    save_directory="$2"
+    shift 2
+    ;;
+  -r | --retries)
+    require_arg "$1" "${2:-}"
+    if ! [[ "$2" =~ ^[1-9][0-9]*$ ]]; then
+      echo "Error: -r/--retries must be a positive integer." >&2
+      exit 1
+    fi
+    retries="$2"
+    shift 2
+    ;;
+  -d | --delete)
+    delete_dir=true
+    shift
+    ;;
+  -v | --verbose)
+    verbose=true
+    shift
+    ;;
+  -l | --log)
+    require_arg "$1" "${2:-}"
+    log_file="$2"
+    shift 2
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Unknown option: $1" >&2
+    usage
+    exit 1
+    ;;
+  esac
 done
 
-# Resolve and create save_directory
+check_dependencies
+
 save_directory="${save_directory/#\~/$HOME}"
 mkdir -p "$save_directory"
 
 output_directory="$save_directory/$output_name"
 output_zip="$save_directory/${output_name}.zip"
 
-# Count non-empty lines (images) in the input file
-if [ -f "$input_file" ]; then
-    total_images_in_file=$(grep -v '^[[:space:]]*$' "$input_file" | wc -l)
-else
-    total_images_in_file=0
-fi
-
-# Check if the input file exists
 if [ ! -f "$input_file" ]; then
-    log "Error: File '$input_file' does not exist in the current directory."
-    log "Exiting..."
-    exit 1
+  log_error "File '$input_file' does not exist."
+  exit 1
 fi
 
-log "File '$input_file' found. Proceeding..."
-log "Total images listed in '$input_file': $total_images_in_file"
-log "Using retries for docker pull: $retries"
-log "Save directory: $save_directory"
-log "Output directory: $output_directory"
-log "Zip file will be named: $output_zip"
+total_images_in_file=$(grep -cv '^[[:space:]]*$' "$input_file")
 
-# Create the output directory if it doesn't exist
+log_verbose "File '$input_file' found. Proceeding..."
+log_verbose "Total images listed in '$input_file': $total_images_in_file"
+log_verbose "Using retries for docker pull: $retries"
+log_verbose "Save directory: $save_directory"
+log_verbose "Output directory: $output_directory"
+log_verbose "Zip file will be named: $output_zip"
+
 mkdir -p "$output_directory"
 
-log "Starting to process Docker images from '$input_file'..."
-log "This might take some time, depending on your internet speed."
+log_info "Processing $total_images_in_file image(s) from '$input_file'..."
 
 # Process each image from the input file
 while IFS= read -r image; do
-    # Skip empty lines
-    if [ -n "$image" ]; then
-        log "Processing image: $image"
+  # Skip empty lines
+  [[ -z "$image" ]] && continue
 
-        # Pull the Docker image with retries
-        if docker_pull_with_retries "$image"; then
-            # Retag the image for Even
-            even_image_tag=$(echo "$image" | sed 's|harbor\.getapp\.sh/||')
-            docker tag "$image" "$even_image_tag"
-            log "Tagged '$image' as '$even_image_tag' for easier uploading to Even."
+  log_verbose "Processing image: $image"
 
-            # Save the image to a tar file
-            output_tar="$output_directory/$(echo "$even_image_tag" | tr / _).tar"
-            log "Saving '$even_image_tag' to tar file: $output_tar"
-            if docker save "$even_image_tag" -o "$output_tar"; then
-                log "Successfully saved image '$even_image_tag' to '$output_tar'"
-            else
-                log "Error: Failed to save image '$even_image_tag' to '$output_tar'"
-            fi
-        else
-            log "Error: Failed to pull or process image '$image' after retries. Skipping..."
-        fi
-    fi
-done < "$input_file"
+  if ! docker_pull_with_retries "$image"; then
+    log_error "Failed to pull '$image'. Skipping..."
+    continue
+  fi
+
+  # Extract name:tag and create safe filename (e.g., nginx:alpine -> nginx_alpine.tar)
+  image_name_tag="${image##*/}"
+  safe_name="${image_name_tag//:/_}"
+  output_tar="$output_directory/${safe_name}.tar"
+
+  log_verbose "Saving '$image' to tar file: $output_tar"
+  if docker save "$image" -o "$output_tar"; then
+    log_success "Saved: ${safe_name}.tar"
+  else
+    log_error "Failed to save image '$image' to '$output_tar'"
+  fi
+done <"$input_file"
 
 # Zip all tar files into a single zip archive
-log "Collecting tar files to add to zip..."
-
-tar_files=( "$output_directory"/*.tar )
-
-if [ ${#tar_files[@]} -eq 0 ]; then
-    log "No tar files found in '$output_directory'. Nothing to zip."
-    log "Summary: images in file = $total_images_in_file, images zipped = 0, retries = $retries"
-    exit 1
+if ! ls "$output_directory"/*.tar &>/dev/null; then
+  log_warning "No tar files found in '$output_directory'. Nothing to zip."
+  exit 1
 fi
 
-for f in "${tar_files[@]}"; do
-    log "Will add to zip: $f"
-done
+tar_files=("$output_directory"/*.tar)
 
-log "Creating zip file: $output_zip"
+log_verbose "Creating zip file: $output_zip with ${#tar_files[@]} tar file(s)"
 
-if zip -j "$output_zip" "${tar_files[@]}"; then
-    log "Successfully created zip file: $output_zip"
-    for f in "${tar_files[@]}"; do
-        log "Successfully added to zip: $f"
-    done
-else
-    log "Error: Failed to create zip file. Check available storage or permissions."
-    log "Summary: images in file = $total_images_in_file, images zipped = 0, retries = $retries"
-    exit 1
+if ! zip -j "$output_zip" "${tar_files[@]}"; then
+  log_error "Failed to create zip file. Check available storage or permissions."
+  exit 1
 fi
 
 total_zipped=${#tar_files[@]}
-log "Summary: images in file = $total_images_in_file, images zipped = $total_zipped, retries = $retries"
 
 # Optional delete of output directory
 if [ "$delete_dir" = true ]; then
-    log "Deleting output directory: $output_directory"
-    rm -rf "$output_directory"
-    log "Output directory '$output_directory' deleted."
+  log_verbose "Deleting output directory: $output_directory"
+  rm -rf "$output_directory"
+  log_verbose "Output directory deleted."
 fi
 
-log "All Docker images have been saved and zipped into '$output_zip'."
-log "Process complete!"
+log_success "Created: $output_zip ($total_zipped image(s))"
