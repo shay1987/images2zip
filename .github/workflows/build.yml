@@ -1,0 +1,69 @@
+name: Build Packages
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: |
+          chmod +x bin/images2zip test/run_tests.sh
+          make test
+
+  build-deb:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y debhelper
+
+      - name: Build deb package
+        run: |
+          ln -s packaging/debian debian
+          dpkg-buildpackage -us -uc -b
+          mkdir -p dist
+          mv ../*.deb dist/
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-package
+          path: dist/*.deb
+
+  build-rpm:
+    needs: test
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: dnf install -y rpm-build make
+
+      - name: Build rpm package
+        run: |
+          mkdir -p ~/rpmbuild/{SOURCES,SPECS}
+          VERSION=$(grep '^Version:' packaging/rpm/images2zip.spec | awk '{print $2}')
+          tar czf ~/rpmbuild/SOURCES/images2zip-${VERSION}.tar.gz \
+            --transform "s,^,images2zip-${VERSION}/," \
+            bin/ man/ packaging/ test/ Makefile LICENSE README.md
+          cp packaging/rpm/images2zip.spec ~/rpmbuild/SPECS/
+          rpmbuild -ba ~/rpmbuild/SPECS/images2zip.spec
+          mkdir -p dist
+          cp ~/rpmbuild/RPMS/noarch/*.rpm dist/
+
+      - name: Upload rpm artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-package
+          path: dist/*.rpm

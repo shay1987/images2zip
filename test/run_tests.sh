@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-IMAGES2ZIP="$PROJECT_ROOT/images2zip.sh"
+IMAGES2ZIP="$PROJECT_ROOT/bin/images2zip"
 
 # Test output directory
 TEST_WORKDIR="$SCRIPT_DIR/tmp"
