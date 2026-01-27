@@ -3,7 +3,10 @@ BINDIR = $(PREFIX)/bin
 MANDIR = $(PREFIX)/share/man
 DESTDIR ?=
 
-.PHONY: install uninstall test clean
+.PHONY: all install uninstall test clean
+
+all:
+	@true
 
 install:
 	install -d $(DESTDIR)$(BINDIR)
