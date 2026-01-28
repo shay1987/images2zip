@@ -81,7 +81,10 @@ jobs:
           tar czf ~/rpmbuild/SOURCES/images2zip-${VERSION}.tar.gz \
             --transform "s,^,images2zip-${VERSION}/," \
             bin/ man/ packaging/ test/ Makefile LICENSE README.md
-          cp packaging/rpm/images2zip.spec ~/rpmbuild/SPECS/
+          DATE=$(date +"%a %b %d %Y")
+          sed -e "s/^Version:.*/Version:        ${VERSION}/" \
+              -e "s/^\* .* Package Maintainer/* ${DATE} Package Maintainer/" \
+              packaging/rpm/images2zip.spec > ~/rpmbuild/SPECS/images2zip.spec
           rpmbuild -ba ~/rpmbuild/SPECS/images2zip.spec
           mkdir -p dist
           cp ~/rpmbuild/RPMS/noarch/*.rpm dist/

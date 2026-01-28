@@ -35,7 +35,7 @@ creating portable image bundles.
 %{_mandir}/man1/images2zip.1*
 
 %changelog
-* Mon Jan 27 2026 Package Maintainer <maintainer@example.com> - 1.0.0-1
+* Tue Jan 27 2026 Package Maintainer <maintainer@example.com> - 1.0.0-1
 - Initial package release
 - Download Docker images from a list file
 - Save images as tar archives
