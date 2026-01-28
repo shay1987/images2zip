@@ -1,0 +1,11 @@
+images2zip (1.0.0-1) unstable; urgency=medium
+
+  * Initial release.
+  * Download Docker images from a list file
+  * Save images as tar archives
+  * Bundle all tars into a single zip file
+  * Support for retry logic on pull failures
+  * Optional cleanup of intermediate tar files
+  * Verbose and logging modes
+
+ -- Package Maintainer <maintainer@example.com>  Mon, 27 Jan 2026 12:00:00 +0000

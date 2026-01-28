@@ -1,0 +1,19 @@
+Source: images2zip
+Section: utils
+Priority: optional
+Maintainer: Package Maintainer <maintainer@example.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+Homepage: https://github.com/shay1987/images2zip
+Rules-Requires-Root: no
+
+Package: images2zip
+Architecture: all
+Depends: ${misc:Depends}, docker.io | docker-ce, zip
+Description: Download Docker images and bundle them into a zip archive
+ images2zip reads a list of Docker image references from a text file,
+ pulls each image, saves it as a tar archive, and creates a zip archive
+ containing all generated tar files.
+ .
+ Useful for transferring Docker images to air-gapped environments or
+ creating portable image bundles.
