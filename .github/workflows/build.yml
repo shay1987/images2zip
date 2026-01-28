@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Run tests
         run: |
           chmod +x bin/images2zip test/run_tests.sh
@@ -73,13 +74,13 @@ jobs:
         run: dnf install -y rpm-build make
 
       - name: Build rpm package
+        env:
+          VERSION: ${{ steps.ver.outputs.VERSION }}
         run: |
           mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-          VERSION="${{ steps.ver.outputs.VERSION }}"
           tar czf ~/rpmbuild/SOURCES/images2zip-${VERSION}.tar.gz \
             --transform "s,^,images2zip-${VERSION}/," \
             bin/ man/ packaging/ test/ Makefile LICENSE README.md
-          # if needed, patch Version: in the spec with $VERSION here
           cp packaging/rpm/images2zip.spec ~/rpmbuild/SPECS/
           rpmbuild -ba ~/rpmbuild/SPECS/images2zip.spec
           mkdir -p dist
@@ -120,8 +121,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref_name }}         # v1.0.0
-          release_name: images2zip ${{ steps.ver.outputs.VERSION }}  # images2zip 1.0.0
+          tag_name: ${{ github.ref_name }} # v1.0.1
+          release_name: images2zip ${{ steps.ver.outputs.VERSION }} # images2zip 1.0.1
           draft: false
           prerelease: false
 
