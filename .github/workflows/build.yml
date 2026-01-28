@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Run tests
         run: |
           chmod +x bin/images2zip test/run_tests.sh
@@ -21,8 +20,20 @@ jobs:
   build-deb:
     needs: test
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ github.ref_name != '' && startsWith(github.ref, 'refs/tags/v') && github.ref_name || '1.0.0' }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            ver="${GITHUB_REF#refs/tags/v}"
+          else
+            ver="${VERSION}"
+          fi
+          echo "VERSION=$ver" >> "$GITHUB_OUTPUT"
 
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y debhelper build-essential
@@ -30,6 +41,7 @@ jobs:
       - name: Build deb package
         run: |
           ln -s packaging/debian debian
+          # optionally write version into debian/changelog here using dch
           dpkg-buildpackage -us -uc -b
           mkdir -p dist
           mv ../*.deb dist/
@@ -47,16 +59,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Derive version from tag
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            ver="${GITHUB_REF#refs/tags/v}"
+          else
+            ver="1.0.0"
+          fi
+          echo "VERSION=$ver" >> "$GITHUB_OUTPUT"
+
       - name: Install build dependencies
         run: dnf install -y rpm-build make
 
       - name: Build rpm package
         run: |
           mkdir -p ~/rpmbuild/{SOURCES,SPECS}
-          VERSION=$(grep '^Version:' packaging/rpm/images2zip.spec | awk '{print $2}')
+          VERSION="${{ steps.ver.outputs.VERSION }}"
           tar czf ~/rpmbuild/SOURCES/images2zip-${VERSION}.tar.gz \
             --transform "s,^,images2zip-${VERSION}/," \
             bin/ man/ packaging/ test/ Makefile LICENSE README.md
+          # if needed, patch Version: in the spec with $VERSION here
           cp packaging/rpm/images2zip.spec ~/rpmbuild/SPECS/
           rpmbuild -ba ~/rpmbuild/SPECS/images2zip.spec
           mkdir -p dist
@@ -67,3 +90,57 @@ jobs:
         with:
           name: rpm-package
           path: dist/*.rpm
+
+  release:
+    needs: [build-deb, build-rpm]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Derive version from tag
+        id: ver
+        run: |
+          ver="${GITHUB_REF#refs/tags/v}"
+          echo "VERSION=$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Download deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-package
+          path: release-artifacts
+
+      - name: Download rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-package
+          path: release-artifacts
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}         # v1.0.0
+          release_name: images2zip ${{ steps.ver.outputs.VERSION }}  # images2zip 1.0.0
+          draft: false
+          prerelease: false
+
+      - name: Upload deb asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: release-artifacts/*.deb
+          asset_name: images2zip-${{ steps.ver.outputs.VERSION }}.deb
+          asset_content_type: application/vnd.debian.binary-package
+
+      - name: Upload rpm asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: release-artifacts/*.rpm
+          asset_name: images2zip-${{ steps.ver.outputs.VERSION }}.rpm
+          asset_content_type: application/x-rpm
