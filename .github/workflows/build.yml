@@ -99,6 +99,8 @@ jobs:
     needs: [build-deb, build-rpm]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
     steps:
       - name: Derive version from tag
         id: ver
