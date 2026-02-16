@@ -1,6 +1,6 @@
 # images2zip
   
-images2zip is a small CLI utility that reads a list of Docker images, pulls them (with optional retries), saves them as tar files, packs them into a zip archive, and logs every step to a timestamped log file.  
+images2zip is a small CLI utility that reads a list of Docker images, pulls them (with optional retries), saves them as tar files, packs them into a zip archive, and optionally logs every step to a timestamped log file.  
   
 It is designed for air‑gapped or constrained environments where you need to pre‑bundle images and move them as a single archive.  
   
@@ -14,7 +14,9 @@ It is designed for air‑gapped or constrained environments where you need to pr
 - Save each image as a `.tar` file.  
 - Zip all `.tar` files into a single `<name>.zip`.  
 - Save output directory and zip under a configurable base directory (default: `~/Downloads`).  
-- Timestamped logging to `images2zip.log`.  
+- Optional timestamped logging to a user-specified file (disabled by default).
+- Verbose mode for detailed progress output.
+- Dependency checking (Docker, zip) before execution.
 - Final summary with:  
   - Total images in the input file.  
   - Total images successfully zipped.  
@@ -35,7 +37,7 @@ It is designed for air‑gapped or constrained environments where you need to pr
 ## Usage
   
 ```
-./images2zip.sh [OPTIONS]
+images2zip [OPTIONS]
 ```
   
 ### Options
@@ -56,13 +58,19 @@ It is designed for air‑gapped or constrained environments where you need to pr
 - `-r, --retries <num>`  
   Number of attempts for `docker pull` for each image (must be ≥ 1).  
   `1` means a single attempt (no extra retries).  
-  On failure, each retry waits 5 seconds before the next attempt.  
-  
-- `-d, --delete`  
-  Delete the output directory after a successful zip, keeping only the zip file.  
-  
-- `-h, --help`  
-  Show a short help message and exit.  
+  On failure, each retry waits 2 seconds before the next attempt.
+
+- `-d, --delete`
+  Delete the output directory after a successful zip, keeping only the zip file.
+
+- `-v, --verbose`
+  Enable verbose output with detailed progress messages.
+
+- `-l, --log <file>`
+  Enable logging to the specified file. Logging is disabled by default.
+
+- `-h, --help`
+  Show a short help message and exit.
   
 ---
   
@@ -90,63 +98,73 @@ The script will strip a configured prefix in its logic (e.g., your private regis
   
 ## Examples
   
-Use defaults (read `images.txt`, write into `~/Downloads/images/`, create `~/Downloads/images.zip`):  
-  
+Use defaults (read `images.txt`, write into `~/Downloads/images/`, create `~/Downloads/images.zip`):
+
 ```
-./images2zip.sh
+images2zip
 ```
-  
-Use a custom input file and output name (still under `~/Downloads`):  
-  
+
+Use a custom input file and output name (still under `~/Downloads`):
+
 ```
-./images2zip.sh -f my_images.txt -n my-bundle
+images2zip -f my_images.txt -n my-bundle
 ```
-  
-Save under a different base directory and enable retries:  
-  
+
+Save under a different base directory and enable retries:
+
 ```
-./images2zip.sh -f images.txt -n lab-pack -s /mnt/shared -r 3
+images2zip -f images.txt -n lab-pack -s /mnt/shared -r 3
 ```
-  
-Use retries and delete the tar directory after zipping:  
-  
+
+Use retries and delete the tar directory after zipping:
+
 ```
-./images2zip.sh -f images.txt -n images-pack -r 3 -d
+images2zip -f images.txt -n images-pack -r 3 -d
 ```
-  
-Show help:  
-  
+
+Enable verbose output:
+
 ```
-./images2zip.sh -h
+images2zip -f images.txt -n my-bundle -v
+```
+
+Log to a file:
+
+```
+images2zip -f images.txt -n my-bundle -l build.log
+```
+
+Show help:
+
+```
+images2zip -h
 ```
   
 ---
   
 ## Logging
-  
-The script writes log messages to:  
-  
+
+Logging is disabled by default. To enable it, use the `-l` flag with a file path:
+
 ```
-images2zip.log
+images2zip -f images.txt -n my-bundle -l build.log
 ```
-  
-in the current working directory.  
-  
-Each log line is prefixed with a timestamp, for example:  
-  
+
+Each log line is prefixed with a timestamp, for example:
+
 ```
 2026-01-19 20:30:00 File 'images.txt' found. Proceeding...
 2026-01-19 20:30:05 Attempt 1/3 for pulling image: nginx:latest
 2026-01-19 20:31:10 Successfully created zip file: /home/user/Downloads/images.zip
 2026-01-19 20:31:10 Summary: images in file = 10, images zipped = 9, retries = 3
 ```
-  
-Logged events include:  
-  
-- Configuration (input file, save directory, output name, retry count).  
-- Per‑image processing (pull attempts, tagging, saving to tar).  
-- Zipping (which tar files are added, success/failure).  
-- Optional deletion of the output directory.  
+
+Logged events include:
+
+- Configuration (input file, save directory, output name, retry count).
+- Per-image processing (pull attempts, tagging, saving to tar).
+- Zipping (which tar files are added, success/failure).
+- Optional deletion of the output directory.
 - Final summary line.  
   
 ---
@@ -163,9 +181,7 @@ Logged events include:
 ---
   
 ## Notes
-  
-- The script assumes Docker is already installed and configured on the host.  
-- It is intended to be run from a directory containing:  
-  - `images2zip.sh`  
-  - Your input file (e.g. `images.txt`)  
+
+- The script assumes Docker is already installed and configured on the host.
+- Install via `make install`; the binary is called `images2zip`.
 - The generated zip can be moved to another machine and loaded with `docker load` on that side.
