@@ -205,13 +205,19 @@ test_default_behavior() {
         return
     fi
 
-    if [[ ! -f "$TEST_WORKDIR/images.zip" ]]; then
-        log_fail "$test_name" "zip file not created"
+    # default output name: images-<dd-mm-YYYY>
+    local today
+    today="$(date '+%d-%m-%Y')"
+    local expected_name="images-${today}"
+    local expected_zip="$TEST_WORKDIR/${expected_name}.zip"
+
+    if [[ ! -f "$expected_zip" ]]; then
+        log_fail "$test_name" "zip file not created at $expected_zip"
         return
     fi
 
     local validation_error
-    if validation_error=$(validate_zip_contains_docker_image "$TEST_WORKDIR/images.zip" "$TEST_IMAGE_TAR"); then
+    if validation_error=$(validate_zip_contains_docker_image "$expected_zip" "$TEST_IMAGE_TAR"); then
         log_pass "$test_name"
     else
         log_fail "$test_name" "$validation_error"
