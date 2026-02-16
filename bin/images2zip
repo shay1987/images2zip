@@ -10,6 +10,7 @@ NC='\033[0m' # No Color
 log_file=""
 input_file="images.txt"
 output_name="images"
+user_set_output_name=false
 save_directory="$HOME/Downloads"
 delete_dir=false
 retries=1
@@ -153,6 +154,7 @@ while [[ $# -gt 0 ]]; do
   -n | --name)
     require_arg "$1" "${2:-}"
     output_name="$2"
+    user_set_output_name=true
     shift 2
     ;;
   -s | --save)
@@ -199,8 +201,13 @@ check_dependencies
 save_directory="${save_directory/#\~/$HOME}"
 mkdir -p "$save_directory"
 
+if ! $user_set_output_name; then
+  output_name="images-$(date '+%d-%m-%Y')"
+fi
+
 output_directory="$save_directory/$output_name"
 output_zip="$save_directory/${output_name}.zip"
+
 
 if [ ! -f "$input_file" ]; then
   log_error "File '$input_file' does not exist."
