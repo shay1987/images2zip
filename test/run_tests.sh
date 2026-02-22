@@ -573,6 +573,82 @@ test_zip_has_content() {
     fi
 }
 
+# Test: --check exits 6 when zip file does not exist (no docker needed)
+test_check_missing_zip() {
+    local test_name="--check exits 6 on missing zip"
+    local output exit_code=0
+    output=$("$IMAGES2ZIP" --check "$TEST_WORKDIR/nonexistent.zip" 2>&1) || exit_code=$?
+
+    if [[ $exit_code -ne 6 ]]; then
+        log_fail "$test_name" "expected exit 6, got $exit_code"
+        return
+    fi
+
+    if ! echo "$output" | grep -qi "check failed"; then
+        log_fail "$test_name" "no 'check failed' message in output"
+        return
+    fi
+
+    log_pass "$test_name"
+}
+
+# Test: --check exits 6 when a tar inside the zip lacks manifest.json (no docker needed)
+test_check_invalid_tar() {
+    local test_name="--check exits 6 on tar without manifest.json"
+    # Build a tar that contains no manifest.json, then zip it
+    echo "not a docker image" > "$TEST_WORKDIR/dummy.txt"
+    tar cf "$TEST_WORKDIR/bad.tar" -C "$TEST_WORKDIR" dummy.txt
+    zip -j "$TEST_WORKDIR/bad.zip" "$TEST_WORKDIR/bad.tar" &>/dev/null
+
+    local output exit_code=0
+    output=$("$IMAGES2ZIP" --check "$TEST_WORKDIR/bad.zip" 2>&1) || exit_code=$?
+
+    if [[ $exit_code -ne 6 ]]; then
+        log_fail "$test_name" "expected exit 6, got $exit_code"
+        return
+    fi
+
+    if ! echo "$output" | grep -qi "check failed"; then
+        log_fail "$test_name" "no 'check failed' message in output"
+        return
+    fi
+
+    log_pass "$test_name"
+}
+
+# Test: --check exits 0 and prints success on a valid docker image zip (docker needed)
+test_check_valid_zip() {
+    local test_name="--check exits 0 on a valid docker image zip"
+
+    if ! check_docker; then
+        log_skip "$test_name (docker unavailable)"
+        return
+    fi
+
+    cd "$TEST_WORKDIR"
+    echo "$TEST_IMAGE" > images.txt
+
+    if ! "$IMAGES2ZIP" -s "$TEST_WORKDIR" -n check_valid -d &>/dev/null; then
+        log_fail "$test_name" "setup: failed to create zip"
+        return
+    fi
+
+    local output exit_code=0
+    output=$("$IMAGES2ZIP" --check "$TEST_WORKDIR/check_valid.zip" 2>&1) || exit_code=$?
+
+    if [[ $exit_code -ne 0 ]]; then
+        log_fail "$test_name" "expected exit 0, got $exit_code: $output"
+        return
+    fi
+
+    if ! echo "$output" | grep -qi "check passed"; then
+        log_fail "$test_name" "no 'check passed' message in output"
+        return
+    fi
+
+    log_pass "$test_name"
+}
+
 # Test: Can load image back from tar
 test_image_can_be_loaded() {
     local test_name="Exported image can be loaded back into docker"
@@ -635,6 +711,8 @@ main() {
     test_retries_invalid_value
     test_retries_zero
     test_quiet_still_shows_errors
+    test_check_missing_zip
+    test_check_invalid_tar
 
     # Tests that require docker and validate actual output
     test_default_behavior
@@ -648,6 +726,7 @@ main() {
     test_long_form_flags
     test_multiple_images
     test_zip_has_content
+    test_check_valid_zip
     test_image_can_be_loaded
 
     echo ""

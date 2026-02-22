@@ -128,6 +128,13 @@ images2zip [OPTIONS]
 - `-l, --log <file>`
   Enable logging to the specified file. Logging is disabled by default.
 
+- `--check <zip>`
+  Validate an existing zip without pulling or saving any images.
+  Extracts the zip to a temporary directory and verifies that every `.tar` inside
+  is a readable Docker image archive (contains `manifest.json`).
+  Exits `0` on success, `6` if any check fails.
+  The `-q`, `-v`, and `-l` flags are respected; all other create-mode options are ignored.
+
 - `-h, --help`
   Show a short help message and exit.
 
@@ -244,6 +251,7 @@ Logged events include:
 | `3` | no images processed |
 | `4` | dependency or environment error |
 | `5` | I/O or filesystem error |
+| `6` | `--check` validation failed |
 
 ---
 

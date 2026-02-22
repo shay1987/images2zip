@@ -91,6 +91,16 @@ Enable logging to the specified \f[I]FILE\f[R]. Logging is disabled by
 default.
 
 .TP
+\f[B]\-\-check\f[R] \f[I]ZIP\f[R]
+Validate an existing zip file without pulling or saving any images.
+Extracts \f[I]ZIP\f[R] to a temporary directory and verifies that every
+\f[CR]*.tar\f[R] inside is a readable Docker image archive (contains a
+\f[CR]manifest.json\f[R] entry).
+Exits 0 on success, 6 if any check fails.
+The \f[CR]\-q\f[R]/\f[CR]\-v\f[R]/\f[CR]\-l\f[R] flags are respected;
+all other create\-mode options are ignored.
+
+.TP
 \f[B]\-h\f[R], \f[B]\[en]help\f[R]
 Display a short help message describing usage, options, and default
 values, then exit.
@@ -185,8 +195,9 @@ optional directory deletion.
 
 .SS EXIT STATUS
 
-Exit status 0 on success; non‑zero on missing input file, no tar files
-to zip, or zip failure.
+Exit status 0 on success; non‑zero on error.
+Notable codes: 2 (bad arguments), 3 (no images processed), 4 (dependency
+error), 5 (I/O error), 6 (\f[CR]\-\-check\f[R] validation failed).
 
 .SS EXAMPLES
 

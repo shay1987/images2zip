@@ -14,8 +14,10 @@ EXIT_USAGE=2
 EXIT_NO_IMAGES=3
 EXIT_DEPENDENCY=4
 EXIT_IO=5
+EXIT_CHECK_FAILED=6
 
 log_file=""
+check_mode_zip=""
 input_file="images.txt"
 output_name="images"
 user_set_output_name=false
@@ -92,12 +94,66 @@ Options:
   -q, --quiet           Suppress all output except errors
   -v, --verbose         Enable verbose output (detailed progress messages)
   -l, --log <file>      Enable logging to specified file (disabled by default)
+  --check <zip>         Validate a zip: verify each .tar is a readable Docker image
+                        archive (contains manifest.json); exits 0 on success, 6 on failure
   -h, --help            Show this help message and exit
 
 Notes:
   - Input file default: $input_file
   - Logging is disabled by default. Use -l to enable.
 EOF
+}
+
+# Validate an existing zip of Docker image tars without pulling or saving anything.
+run_check_mode() {
+  local zip_file="$1"
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+
+  if [[ ! -f "$zip_file" ]]; then
+    rm -rf "$tmp_dir"
+    log_error "Check failed: '$zip_file' does not exist or is not a file."
+    exit $EXIT_CHECK_FAILED
+  fi
+
+  if ! unzip -q "$zip_file" -d "$tmp_dir" 2>/dev/null; then
+    rm -rf "$tmp_dir"
+    log_error "Check failed: '$zip_file' could not be extracted (corrupt or not a zip)."
+    exit $EXIT_CHECK_FAILED
+  fi
+
+  local tars=("$tmp_dir"/*.tar)
+  if [[ ! -e "${tars[0]}" ]]; then
+    rm -rf "$tmp_dir"
+    log_error "Check failed: no .tar files found inside '$zip_file'."
+    exit $EXIT_CHECK_FAILED
+  fi
+
+  local failed=0
+  for tar_file in "${tars[@]}"; do
+    local name
+    name="$(basename "$tar_file")"
+    if ! tar -tf "$tar_file" &>/dev/null; then
+      log_error "Check failed: '$name' is not a valid tar archive."
+      failed=1
+      continue
+    fi
+    if ! tar -tf "$tar_file" 2>/dev/null | grep -q "manifest.json"; then
+      log_error "Check failed: '$name' does not contain manifest.json (not a valid Docker image tar)."
+      failed=1
+    else
+      log_verbose "OK: $name"
+    fi
+  done
+
+  rm -rf "$tmp_dir"
+
+  if [[ $failed -ne 0 ]]; then
+    exit $EXIT_CHECK_FAILED
+  fi
+
+  local count="${#tars[@]}"
+  log_success "Check passed: $zip_file ($count image tar(s) validated)"
 }
 
 docker_pull_with_retries() {
@@ -181,6 +237,11 @@ while [[ $# -gt 0 ]]; do
     log_file="$2"
     shift 2
     ;;
+  --check)
+    require_arg "$1" "${2:-}"
+    check_mode_zip="$2"
+    shift 2
+    ;;
   -h | --help)
     usage
     exit 0
@@ -192,6 +253,12 @@ while [[ $# -gt 0 ]]; do
     ;;
   esac
 done
+
+# Check mode: validate an existing zip without docker
+if [[ -n "$check_mode_zip" ]]; then
+  run_check_mode "$check_mode_zip"
+  exit $EXIT_SUCCESS
+fi
 
 check_dependencies
 
