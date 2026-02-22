@@ -1,0 +1,19 @@
+# Claude Code artifacts
+.claude/
+claude.md
+
+# Editor / OS artifacts
+.DS_Store
+*.swp
+*~
+*.bak
+
+# Test temporaries (created by make test / run_tests.sh)
+test/tmp/
+
+# Local build outputs
+dist/
+debian/
+
+# Packaging tarballs created during local builds
+*.tar.gz

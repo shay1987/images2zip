@@ -120,32 +120,46 @@ test_help_flag_long() {
     fi
 }
 
-# Test: Unknown option shows error
+# Test: Unknown option shows error and exits with code 2 (EXIT_USAGE)
 test_unknown_option() {
-    local test_name="Unknown option shows error"
+    local test_name="Unknown option shows error (exit 2)"
     local output
-    output=$("$IMAGES2ZIP" --invalid-option 2>&1) || true
+    local exit_code
+    output=$("$IMAGES2ZIP" --invalid-option 2>&1) || exit_code=$?
 
-    if echo "$output" | grep -q "Unknown option"; then
-        log_pass "$test_name"
-    else
+    if ! echo "$output" | grep -q "Unknown option"; then
         log_fail "$test_name" "error message not found"
+        return
     fi
+
+    if [[ "${exit_code:-0}" -ne 2 ]]; then
+        log_fail "$test_name" "expected exit code 2, got ${exit_code:-0}"
+        return
+    fi
+
+    log_pass "$test_name"
 }
 
-# Test: Missing input file shows error
+# Test: Missing input file shows error and exits with code 5 (EXIT_IO)
 test_missing_input_file() {
-    local test_name="Missing input file shows error"
+    local test_name="Missing input file shows error (exit 5)"
     cd "$TEST_WORKDIR"
 
     local output
-    output=$("$IMAGES2ZIP" -f nonexistent.txt 2>&1) || true
+    local exit_code
+    output=$("$IMAGES2ZIP" -f nonexistent.txt 2>&1) || exit_code=$?
 
-    if echo "$output" | grep -q "does not exist"; then
-        log_pass "$test_name"
-    else
+    if ! echo "$output" | grep -q "does not exist"; then
         log_fail "$test_name" "error message not found"
+        return
     fi
+
+    if [[ "${exit_code:-0}" -ne 5 ]]; then
+        log_fail "$test_name" "expected exit code 5, got ${exit_code:-0}"
+        return
+    fi
+
+    log_pass "$test_name"
 }
 
 # Test: Flag requiring value without value shows error
@@ -375,6 +389,45 @@ test_verbose_flag() {
     fi
 }
 
+# Test: Quiet flag suppresses normal output
+test_quiet_flag() {
+    local test_name="Quiet flag (-q) suppresses normal output"
+    if ! check_docker; then
+        log_skip "$test_name (docker unavailable)"; return
+    fi
+    cd "$TEST_WORKDIR"
+    echo "$TEST_IMAGE" > images.txt
+
+    local stdout
+    stdout=$("$IMAGES2ZIP" -s "$TEST_WORKDIR" -n quiet_test -q -d 2>/dev/null) || {
+        log_fail "$test_name" "script failed"; return
+    }
+
+    if echo "$stdout" | grep -qE '\[(INFO|SUCCESS|WARNING)\]'; then
+        log_fail "$test_name" "INFO/SUCCESS/WARNING found in stdout: $stdout"
+        return
+    fi
+
+    if [[ ! -f "$TEST_WORKDIR/quiet_test.zip" ]]; then
+        log_fail "$test_name" "zip not created"; return
+    fi
+
+    log_pass "$test_name"
+}
+
+# Test: Quiet flag still shows errors
+test_quiet_still_shows_errors() {
+    local test_name="Quiet flag (-q) still shows errors"
+    cd "$TEST_WORKDIR"
+    local stderr
+    stderr=$("$IMAGES2ZIP" -q -f nonexistent.txt 2>&1 >/dev/null) || true
+    if echo "$stderr" | grep -q "does not exist"; then
+        log_pass "$test_name"
+    else
+        log_fail "$test_name" "error message not found in stderr"
+    fi
+}
+
 # Test: Log flag creates log file with content
 test_log_flag() {
     local test_name="Log flag (-l) creates log file with entries"
@@ -581,6 +634,7 @@ main() {
     test_flag_requires_value
     test_retries_invalid_value
     test_retries_zero
+    test_quiet_still_shows_errors
 
     # Tests that require docker and validate actual output
     test_default_behavior
@@ -589,6 +643,7 @@ main() {
     test_delete_flag
     test_no_delete_keeps_directory
     test_verbose_flag
+    test_quiet_flag
     test_log_flag
     test_long_form_flags
     test_multiple_images

@@ -77,6 +77,11 @@ Delete the output directory after a successful zip is created, keeping
 only the zip file.
 
 .TP
+\f[B]\-q\f[R], \f[B]\[en]quiet\f[R]
+Suppress all output except errors.
+Useful for scripts and cron jobs where only failures matter.
+
+.TP
 \f[B]\-v\f[R], \f[B]\[en]verbose\f[R]
 Enable verbose output with detailed progress messages.
 
@@ -126,8 +131,8 @@ them easier to use in other environments.
 
 .IP "1." 3
 \f[B]Argument parsing\f[R] \[en] parses options to determine input file,
-save directory, output name, retry count, delete behavior, verbose mode,
-log file, and help.
+save directory, output name, retry count, delete behavior, quiet/verbose
+mode, log file, and help.
 
 .PD 0
 .P

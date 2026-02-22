@@ -40,9 +40,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y debhelper build-essential
 
       - name: Build deb package
+        env:
+          VERSION: ${{ steps.ver.outputs.VERSION }}
         run: |
+          sed -i "1s/images2zip ([^)]*)/images2zip (${VERSION}-1)/" packaging/debian/changelog
           ln -s packaging/debian debian
-          # optionally write version into debian/changelog here using dch
           dpkg-buildpackage -us -uc -b
           mkdir -p dist
           mv ../*.deb dist/
