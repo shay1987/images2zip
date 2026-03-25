@@ -9,11 +9,11 @@ files, zip them, and log all operations.
 
 .SS SYNOPSIS
 
-\f[B]images2zip.sh\f[R] [\f[B]OPTIONS\f[R]]
+\f[B]images2zip\f[R] [\f[B]OPTIONS\f[R]]
 
 .SS DESCRIPTION
 
-\f[B]images2zip.sh\f[R] reads a list of Docker image references from a
+\f[B]images2zip\f[R] reads a list of Docker image references from a
 text file, pulls each image, retags it, saves it as a tar archive into a
 directory, and finally creates a zip archive containing all generated
 tar files.
@@ -32,8 +32,8 @@ image counts. Logging is disabled by default.
 .PD
 
 By default, the script expects an \f[CR]images.txt\f[R] file in the
-current working directory and creates an \f[CR]images/\f[R] directory
-with \f[CR]images.zip\f[R].
+current working directory and creates a date-stamped output directory and
+zip named \f[CR]images-DD-MM-YYYY\f[R] (where the date is today's date).
 With the \f[CR]\-s/\-\-save\f[R] option, outputs are written under a
 configurable base directory (default: \f[CR]\[ti]/Downloads\f[R]).
 
@@ -50,7 +50,7 @@ Default: \f[CR]images.txt\f[R].
 Set the output name (directory and zip base name).
 The script creates a directory named \f[I]NAME\f[R] under the save
 directory and a zip file named \f[CR]NAME.zip\f[R] in the same location.
-Default: \f[CR]images\f[R].
+Default: auto-generated as \f[CR]images-DD-MM-YYYY\f[R] (today's date).
 
 .TP
 \f[B]\-s\f[R], \f[B]\[en]save\f[R] \f[I]DIR\f[R]
@@ -201,18 +201,14 @@ error), 5 (I/O error), 6 (\f[CR]\-\-check\f[R] validation failed).
 
 .SS EXAMPLES
 
-(Replace the markers around each example with \f[CR]sh\f[R] after
-pasting)
-
 .PP
-
-Run with defaults:
+Run with defaults (output name is auto-generated as \f[CR]images-DD-MM-YYYY\f[R]):
 
 .PD 0
 .P
 .PD
 
-\f[CR]./images2zip.sh\f[R]
+\f[CR]images2zip\f[R]
 
 .PP
 Custom input and output name (saved under \f[CR]\[ti]/Downloads\f[R]):
@@ -221,7 +217,7 @@ Custom input and output name (saved under \f[CR]\[ti]/Downloads\f[R]):
 .P
 .PD
 
-\f[CR]./images2zip.sh \-f my_images.txt \-n my-bundle\f[R]
+\f[CR]images2zip \-f my_images.txt \-n my-bundle\f[R]
 
 .PP
 Custom save directory and retries:
@@ -230,7 +226,7 @@ Custom save directory and retries:
 .P
 .PD
 
-\f[CR]./images2zip.sh \-f images.txt \-n lab-pack \-s /mnt/shared \-r 3\f[R]
+\f[CR]images2zip \-f images.txt \-n lab-pack \-s /mnt/shared \-r 3\f[R]
 
 .PP
 Retries and delete tars afterward:
@@ -239,7 +235,25 @@ Retries and delete tars afterward:
 .P
 .PD
 
-\f[CR]./images2zip.sh \-f images.txt \-n images-pack \-r 3 \-d\f[R]
+\f[CR]images2zip \-f images.txt \-n images-pack \-r 3 \-d\f[R]
+
+.PP
+Suppress all output except errors (useful for cron jobs):
+
+.PD 0
+.P
+.PD
+
+\f[CR]images2zip \-f images.txt \-n my-bundle \-q\f[R]
+
+.PP
+Validate an existing zip without pulling or saving any images:
+
+.PD 0
+.P
+.PD
+
+\f[CR]images2zip \-\-check /path/to/my-bundle.zip\f[R]
 
 .PP
 Show help:
@@ -248,11 +262,11 @@ Show help:
 .P
 .PD
 
-\f[CR]./images2zip.sh \-h\f[R]
+\f[CR]images2zip \-h\f[R]
 
 .SS FILES
 
-\f[CR]images2zip.sh\f[R] \[en] the script itself.
+\f[CR]images2zip\f[R] \[en] the installed binary.
 
 .PD 0
 .P
